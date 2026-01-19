@@ -1,0 +1,28 @@
+# Python
+ragenv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.Python
+.pytest_cache/
+
+# Environment variables
+.env
+.env.*
+
+# Chroma database
+db/
+chroma/
+chromadb/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

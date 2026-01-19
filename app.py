@@ -24,6 +24,17 @@ class AddRequest(BaseModel):
 chroma = chromadb.PersistentClient(path="./db")
 collection = chroma.get_or_create_collection("docs")
 
+@app.get("/")
+def root():
+    return {
+        "message": "DevOps RAG API",
+        "endpoints": {
+            "POST /query": "Query the knowledge base",
+            "POST /add": "Add content to knowledge base", 
+            "GET /health": "Health check"
+        }
+    }
+
 @app.post("/query")
 def query(request: QueryRequest):
     q = request.q
@@ -43,10 +54,10 @@ def query(request: QueryRequest):
     logging.info(f"Retrieved context: {context}")
 
     # deterministic safety guard
-    if q.lower() not in context.lower():
-        return {
-            "answer": "I do not know. The information is not available in the knowledge base."
-        }
+    # if q.lower() not in context.lower():
+    #     return {
+    #         "answer": "I do not know. The information is not available in the knowledge base."
+    #     }
 
     prompt = f"""
 Context:
