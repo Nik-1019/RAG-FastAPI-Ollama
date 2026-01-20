@@ -1,99 +1,48 @@
+import os
 from fastapi import FastAPI
 from pydantic import BaseModel
 import chromadb
-import ollama
-import os
-import logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-)
+# Mock LLM mode for CI testing
+USE_MOCK_LLM = os.getenv("USE_MOCK_LLM", "0") == "1"
 
-MODEL_NAME = os.getenv("MODEL_NAME", "tinyllama")
-logging.info(f"Using model: {MODEL_NAME}")
+if not USE_MOCK_LLM:
+    import ollama
 
 app = FastAPI()
 
 class QueryRequest(BaseModel):
     q: str
 
-class AddRequest(BaseModel):
-    text: str
-
 chroma = chromadb.PersistentClient(path="./db")
 collection = chroma.get_or_create_collection("docs")
-
-@app.get("/")
-def root():
-    return {
-        "message": "DevOps RAG API",
-        "endpoints": {
-            "POST /query": "Query the knowledge base",
-            "POST /add": "Add content to knowledge base", 
-            "GET /health": "Health check"
-        }
-    }
 
 @app.post("/query")
 def query(request: QueryRequest):
     q = request.q
-    logging.info(f"/query asked: {q}")
-
-    results = collection.query(
-        query_texts=[q],
-        n_results=1
-    )
-
+    results = collection.query(query_texts=[q], n_results=1)
+    
     if not results["documents"] or not results["documents"][0]:
-        return {
-            "answer": "I do not know. The information is not available in the knowledge base."
-        }
-
+        return {"answer": "I do not know. The information is not available in the knowledge base."}
+    
     context = results["documents"][0][0]
-    logging.info(f"Retrieved context: {context}")
+    
+    # Deterministic safety guard - check if key terms from question are in context
+    stop_words = {'what', 'is', 'are', 'how', 'why', 'when', 'where', 'who', 'which', 'the', 'a', 'an'}
+    question_words = [word.lower().strip('?.,!') for word in q.split() 
+                     if len(word) > 3 and word.lower() not in stop_words]
+    context_lower = context.lower()
+    
+    # All meaningful words from the question should be in the context
+    if question_words and not all(word in context_lower for word in question_words):
+        return {"answer": "I do not know. The information is not available in the knowledge base."}
 
-    # deterministic safety guard
-    # if q.lower() not in context.lower():
-    #     return {
-    #         "answer": "I do not know. The information is not available in the knowledge base."
-    #     }
-
-    prompt = f"""
-Context:
-{context}
-
-Question:
-{q}
-
-Answer using only the context above.
-"""
+    if USE_MOCK_LLM:
+        return {"answer": context}
 
     answer = ollama.generate(
-        model=MODEL_NAME,
-        prompt=prompt
+        model="tinyllama",
+        prompt=f"Context:\n{context}\n\nQuestion: {q}\n\nAnswer using only the context above."
     )
 
-    return {
-        "answer": answer["response"].strip()
-    }
-
-@app.post("/add")
-def add_knowledge(request: AddRequest):
-    import uuid
-    doc_id = str(uuid.uuid4())
-
-    collection.add(
-        documents=[request.text.strip()],
-        ids=[doc_id]
-    )
-
-    return {
-        "status": "success",
-        "message": "Content added to knowledge base",
-        "id": doc_id
-    }
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+    return {"answer": answer["response"].strip()}

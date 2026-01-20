@@ -1,4 +1,1 @@
-Kubernetes is a container orchestration platform used to manage containers at scale
-
-
-Nikko Cajayon is a student of Pamantasan ng Lungsod ng Maynila
+Kubernetes is a container platform used to manage containers at scale.
